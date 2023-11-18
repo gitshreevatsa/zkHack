@@ -5,7 +5,7 @@ function Navbar() {
   return (
     <div className='navbar'>
         <div className='navbar-heading'>
-            ICP Pay
+            Aleo Pay
         </div>
     </div>
   )

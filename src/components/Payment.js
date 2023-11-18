@@ -1,9 +1,16 @@
 import React, { useState, useEffect } from "react";
 import { useParams } from "react-router-dom";
 import axios from "axios";
+import { useWallet } from "@demox-labs/aleo-wallet-adapter-react";
+import {
+  Transaction,
+  WalletAdapterNetwork,
+  WalletNotConnectedError,
+} from "@demox-labs/aleo-wallet-adapter-base";
 
 function Payment() {
   const [wallet, setWallet] = useState();
+  const [record, setRecord] = useState();
   const [address, setAddress] = useState("");
   const [callBackUrl, setCallBackUrl] = useState("");
   const [subscriptionFee, setSubscriptionFee] = useState();
@@ -11,6 +18,7 @@ function Payment() {
   const [user, setUser] = useState("");
   const { walletAddress } = useParams();
   const { apiKey } = useParams();
+  const { publickey, requestRecords, requestTransaction } = useWallet();
 
   const getKey = async () => {
     try {
@@ -28,39 +36,32 @@ function Payment() {
   }, [apiKey]);
 
   async function connectWallet() {
-    console.log(walletAddress);
-    const icpCanisterId = "ryjl3-tyaaa-aaaaa-aaaba-cai";
-    const whitelist = [icpCanisterId];
-    const publicKey = await window.ic.plug.requestConnect({ whitelist });
-    console.log("Connected to ", publicKey);
-
-    console.log(await window.ic.plug.isConnected());
-    console.log(window.ic.plug.sessionManager.sessionData);
-    console.log(window.ic.plug.sessionManager.sessionData.principalId);
-    if (
-      walletAddress === window.ic.plug.sessionManager.sessionData.principalId
-    ) {
-      setAddress(walletAddress);
-    } else {
-      alert("Wallet address is not correct");
-    }
+    const program = "credits.aleo";
+    const records = await requestRecords(program);
+    console.log(records, "RECORDS");
+    setWallet(publickey);
+    setRecord(records);
   }
 
   async function pay() {
-    const transferArgs = {
-      to: user?.walletAddress,
-      amount: user.amount * (10 ** 8),
-      memo: new Uint16Array(8),
-    };
-    console.log(user.amount * (10 ** 8));
-    console.log(transferArgs)
-
-    await window.ic.plug.requestTransfer(transferArgs);
-    await axios.patch(`http://localhost:5000/api/update/${apiKey}/${address}`)
+      const inputs = [
+        JSON.parse(record),
+        user.walletAddress,
+        `${user.amount}u64`,
+      ];
+    const transaction = Transaction.createTransaction(
+      wallet,
+      WalletAdapterNetwork.Testnet,
+      "credits.aleo",
+      "transfer",
+      inputs,
+      65_000
+    );
+    await requestTransaction(transaction);
+    await axios.patch(`http://localhost:5000/api/update/${apiKey}/${address}`);
     const res = axios.get(
       `${user?.callBackUrl}?apiKey=${apiKey}&walletAddress=${walletAddress}&subscription=true`
     ); // call the call backurl with the payment details
-
   }
 
   return (
